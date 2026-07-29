@@ -137,3 +137,15 @@ model Event {
   @@index([businessId, type, createdAt])
   @@map("events")
 }
+
+// Анонимные визиты самой карты (не карточки конкретного бизнеса).
+// Клиенту регистрация не нужна (ТЗ раздел 3), но считать посетителей
+// владельцу продукта надо — считаем по session_hash без ФИО/телефона.
+model Visit {
+  id          String   @id @default(cuid())
+  sessionHash String   @map("session_hash")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([sessionHash, createdAt])
+  @@map("visits")
+}

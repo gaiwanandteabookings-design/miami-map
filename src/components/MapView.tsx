@@ -62,6 +62,8 @@ export default function MapView({ businesses }: { businesses: BusinessPin[] }) {
       () => {},
     );
 
+    fetch('/api/visits', { method: 'POST', keepalive: true }).catch(() => {});
+
     return () => {
       map.remove();
       mapRef.current = null;
