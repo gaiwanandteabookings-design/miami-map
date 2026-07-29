@@ -1,16 +1,13 @@
 // Реестр клеток — модель данных. См. ТЗ раздел 7.
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
   extensions = [postgis]
-}
-
-generator json {
-  provider = "prisma-client-js"
 }
 
 // --- enums ---
