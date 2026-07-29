@@ -76,3 +76,24 @@ export function isNew(createdAt: Date, now: Date = new Date()): boolean {
   const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
   return now.getTime() - createdAt.getTime() < THIRTY_DAYS_MS;
 }
+
+/**
+ * Отрисовка сетки — только при зуме от 15 и выше (ТЗ раздел 8).
+ * Строит квадраты клеток, попадающие в видимую область карты, плюс
+ * небольшой запас по краям, чтобы линии не обрывались при панораме.
+ */
+export function gridCellsInBounds(
+  bounds: { getWest(): number; getSouth(): number; getEast(): number; getNorth(): number },
+  sizeM: CellSize,
+) {
+  const sw = latLngToCell(bounds.getSouth(), bounds.getWest(), sizeM);
+  const ne = latLngToCell(bounds.getNorth(), bounds.getEast(), sizeM);
+
+  const cells: CellIndex[] = [];
+  for (let x = sw.cellX - 1; x <= ne.cellX + 1; x++) {
+    for (let y = sw.cellY - 1; y <= ne.cellY + 1; y++) {
+      cells.push({ cellX: x, cellY: y, sizeM });
+    }
+  }
+  return cells;
+}

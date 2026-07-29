@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import maplibregl, { Map as MLMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { MIAMI_DOWNTOWN, distanceMeters, isNew } from '@/lib/grid';
+import { MIAMI_DOWNTOWN, distanceMeters, isNew, gridCellsInBounds, cellToBounds, cellCode } from '@/lib/grid';
 import LayerToggle, { type Layer } from './LayerToggle';
 import NearbyPanel from './NearbyPanel';
 
@@ -19,18 +19,50 @@ type BusinessPin = {
   category: { name: string; icon: string | null };
 };
 
-const OSM_STYLE = {
+// Светлая минималистичная подложка (CARTO Positron) — вместо шумного
+// дефолтного стиля tile.openstreetmap.org с кучей подписей и цветных зон.
+const BASEMAP_STYLE = {
   version: 8 as const,
+  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
   sources: {
-    osm: {
+    basemap: {
       type: 'raster' as const,
-      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tiles: ['https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png'],
       tileSize: 256,
-      attribution: '© OpenStreetMap contributors',
+      attribution: '© OpenStreetMap contributors © CARTO',
     },
   },
-  layers: [{ id: 'osm', type: 'raster' as const, source: 'osm' }],
+  layers: [{ id: 'basemap', type: 'raster' as const, source: 'basemap' }],
 };
+
+const GRID_MIN_ZOOM = 15;
+const GRID_SIZE_M = 200;
+
+function buildGridGeoJSON(map: MLMap): GeoJSON.FeatureCollection {
+  const cells = gridCellsInBounds(map.getBounds(), GRID_SIZE_M);
+  return {
+    type: 'FeatureCollection',
+    features: cells.map((cell) => {
+      const b = cellToBounds(cell);
+      return {
+        type: 'Feature',
+        properties: { code: cellCode(cell) },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [b.west, b.south],
+              [b.east, b.south],
+              [b.east, b.north],
+              [b.west, b.north],
+              [b.west, b.south],
+            ],
+          ],
+        },
+      };
+    }),
+  };
+}
 
 export default function MapView({ businesses }: { businesses: BusinessPin[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -43,12 +75,50 @@ export default function MapView({ businesses }: { businesses: BusinessPin[] }) {
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: OSM_STYLE,
+      style: BASEMAP_STYLE,
       center: [MIAMI_DOWNTOWN.lng, MIAMI_DOWNTOWN.lat],
-      zoom: 13,
+      zoom: 16,
     });
     map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
     mapRef.current = map;
+
+    // Сетка клеток — только при зуме от 15 и выше (ТЗ раздел 8).
+    const updateGrid = () => {
+      const source = map.getSource('grid-cells') as maplibregl.GeoJSONSource | undefined;
+      if (!source || map.getZoom() < GRID_MIN_ZOOM) return;
+      source.setData(buildGridGeoJSON(map));
+    };
+
+    map.on('load', () => {
+      map.addSource('grid-cells', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'grid-lines',
+        type: 'line',
+        source: 'grid-cells',
+        minzoom: GRID_MIN_ZOOM,
+        paint: { 'line-color': '#0a84ff', 'line-width': 1, 'line-opacity': 0.5 },
+      });
+      map.addLayer({
+        id: 'grid-labels',
+        type: 'symbol',
+        source: 'grid-cells',
+        minzoom: GRID_MIN_ZOOM,
+        layout: {
+          'text-field': ['get', 'code'],
+          'text-size': 10,
+          'text-anchor': 'top-left',
+          'text-offset': [0.3, 0.2],
+          'text-allow-overlap': false,
+        },
+        paint: { 'text-color': '#0a84ff', 'text-halo-color': '#fff', 'text-halo-width': 1 },
+      });
+      updateGrid();
+    });
+
+    map.on('moveend', updateGrid);
 
     // Тап по клетке → форма занятия клетки. См. ТЗ раздел 12, пункт 3.
     map.on('dblclick', (e) => {
