@@ -33,16 +33,16 @@ type BusinessPin = {
   category: { name: string; icon: string | null };
 };
 
-// Светлая подложка без подписей (CARTO Positron, nolabels) — никаких отелей,
-// POI и прочего шума, который перебивает сетку клеток. Названия бизнесов и
-// коды клеток — свои, их и так видно на маркерах и в сетке.
+// Светлая подложка CARTO Positron. Без названий улиц и района совсем не
+// сориентироваться, поэтому подписи оставлены — но сетка теперь рисуется
+// поверх контрастным тёмным цветом (см. ниже), так что не теряется.
 const BASEMAP_STYLE = {
   version: 8 as const,
   glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
   sources: {
     basemap: {
       type: 'raster' as const,
-      tiles: ['https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}@2x.png'],
+      tiles: ['https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png'],
       tileSize: 256,
       attribution: '© OpenStreetMap contributors © CARTO',
     },
@@ -87,11 +87,12 @@ export default function MapView({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
-  const cellSizeRef = useRef<CellSize>(200);
+  const userMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const cellSizeRef = useRef<CellSize>(100);
 
   const [layer, setLayer] = useState<Layer>('places');
   const [categoryId, setCategoryId] = useState<string | 'all'>('all');
-  const [cellSize, setCellSize] = useState<CellSize>(200);
+  const [cellSize, setCellSize] = useState<CellSize>(100);
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null);
   const [bottomTab, setBottomTab] = useState<'nearby' | 'cell'>('nearby');
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
@@ -236,6 +237,23 @@ export default function MapView({
       mapRef.current = null;
     };
   }, []);
+
+  // Точка «я здесь» — своя геолокация, как синяя точка в Google Maps.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !userPos) return;
+
+    if (!userMarkerRef.current) {
+      const el = document.createElement('div');
+      el.className = 'you-are-here';
+      el.innerHTML = '<span class="you-are-here-halo"></span><span class="you-are-here-dot"></span>';
+      userMarkerRef.current = new maplibregl.Marker({ element: el })
+        .setLngLat([userPos.lng, userPos.lat])
+        .addTo(map);
+    } else {
+      userMarkerRef.current.setLngLat([userPos.lng, userPos.lat]);
+    }
+  }, [userPos]);
 
   // Перерисовать сетку при смене размера клетки.
   useEffect(() => {
