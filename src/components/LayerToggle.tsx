@@ -10,7 +10,7 @@ export default function LayerToggle({
   onChange: (l: Layer) => void;
 }) {
   return (
-    <div className="layer-toggle">
+    <div className="layer-tabs">
       <button className={layer === 'places' ? 'active' : ''} onClick={() => onChange('places')}>
         Места
       </button>

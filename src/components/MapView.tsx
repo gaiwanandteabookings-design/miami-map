@@ -3,9 +3,22 @@
 import { useEffect, useRef, useState } from 'react';
 import maplibregl, { Map as MLMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { MIAMI_DOWNTOWN, distanceMeters, isNew, gridCellsInBounds, cellToBounds, cellCode } from '@/lib/grid';
+import {
+  MIAMI_DOWNTOWN,
+  distanceMeters,
+  isNew,
+  gridCellsInBounds,
+  cellToBounds,
+  cellCode,
+  latLngToCell,
+  type CellSize,
+} from '@/lib/grid';
 import LayerToggle, { type Layer } from './LayerToggle';
-import NearbyPanel from './NearbyPanel';
+import CityRow from './CityRow';
+import FiltersRow from './FiltersRow';
+import BottomPanel, { type SelectedCell } from './BottomPanel';
+
+type Category = { id: string; name: string };
 
 type BusinessPin = {
   id: string;
@@ -14,6 +27,7 @@ type BusinessPin = {
   lat: number;
   lng: number;
   layer: 'place' | 'service_area';
+  categoryId: string;
   serviceRadiusM: number | null;
   createdAt: Date | string;
   category: { name: string; icon: string | null };
@@ -36,10 +50,9 @@ const BASEMAP_STYLE = {
 };
 
 const GRID_MIN_ZOOM = 15;
-const GRID_SIZE_M = 200;
 
-function buildGridGeoJSON(map: MLMap): GeoJSON.FeatureCollection {
-  const cells = gridCellsInBounds(map.getBounds(), GRID_SIZE_M);
+function buildGridGeoJSON(map: MLMap, sizeM: CellSize): GeoJSON.FeatureCollection {
+  const cells = gridCellsInBounds(map.getBounds(), sizeM);
   return {
     type: 'FeatureCollection',
     features: cells.map((cell) => {
@@ -64,11 +77,27 @@ function buildGridGeoJSON(map: MLMap): GeoJSON.FeatureCollection {
   };
 }
 
-export default function MapView({ businesses }: { businesses: BusinessPin[] }) {
+export default function MapView({
+  businesses,
+  categories,
+}: {
+  businesses: BusinessPin[];
+  categories: Category[];
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
+  const cellSizeRef = useRef<CellSize>(200);
+
   const [layer, setLayer] = useState<Layer>('places');
+  const [categoryId, setCategoryId] = useState<string | 'all'>('all');
+  const [cellSize, setCellSize] = useState<CellSize>(200);
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [bottomTab, setBottomTab] = useState<'nearby' | 'cell'>('nearby');
+  const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
+
+  useEffect(() => {
+    cellSizeRef.current = cellSize;
+  }, [cellSize]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -79,14 +108,14 @@ export default function MapView({ businesses }: { businesses: BusinessPin[] }) {
       center: [MIAMI_DOWNTOWN.lng, MIAMI_DOWNTOWN.lat],
       zoom: 16,
     });
-    map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
+    map.addControl(new maplibregl.NavigationControl(), 'top-left');
     mapRef.current = map;
 
     // Сетка клеток — только при зуме от 15 и выше (ТЗ раздел 8).
     const updateGrid = () => {
       const source = map.getSource('grid-cells') as maplibregl.GeoJSONSource | undefined;
       if (!source || map.getZoom() < GRID_MIN_ZOOM) return;
-      source.setData(buildGridGeoJSON(map));
+      source.setData(buildGridGeoJSON(map, cellSizeRef.current));
     };
 
     map.on('load', () => {
@@ -120,7 +149,24 @@ export default function MapView({ businesses }: { businesses: BusinessPin[] }) {
 
     map.on('moveend', updateGrid);
 
-    // Тап по клетке → форма занятия клетки. См. ТЗ раздел 12, пункт 3.
+    // Один тап по клетке → показать её код/цену во вкладке «Клетка».
+    // Двойной тап → сразу форма занятия клетки (ТЗ раздел 12, пункт 3).
+    map.on('click', (e) => {
+      const { lat, lng } = e.lngLat;
+      const cell = latLngToCell(lat, lng, cellSizeRef.current);
+      const b = cellToBounds(cell);
+      const centerLat = (b.north + b.south) / 2;
+      const centerLng = (b.east + b.west) / 2;
+      setSelectedCell({
+        cell,
+        code: cellCode(cell),
+        lat: centerLat,
+        lng: centerLng,
+        distanceFromDowntown: distanceMeters(MIAMI_DOWNTOWN, { lat: centerLat, lng: centerLng }),
+      });
+      setBottomTab('cell');
+    });
+
     map.on('dblclick', (e) => {
       e.preventDefault();
       const { lat, lng } = e.lngLat;
@@ -140,14 +186,25 @@ export default function MapView({ businesses }: { businesses: BusinessPin[] }) {
     };
   }, []);
 
-  // Слои: места (адрес) и выезд по району (зона обслуживания).
+  // Перерисовать сетку при смене размера клетки.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    const source = map.getSource('grid-cells') as maplibregl.GeoJSONSource | undefined;
+    if (!source || map.getZoom() < GRID_MIN_ZOOM) return;
+    source.setData(buildGridGeoJSON(map, cellSize));
+  }, [cellSize]);
+
+  // Слои: места (адрес) и выезд по району (зона обслуживания) + фильтр по категории.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    const visible = businesses.filter((b) =>
-      layer === 'places' ? b.layer === 'place' : b.layer === 'service_area',
-    );
+    const visible = businesses.filter((b) => {
+      const layerMatch = layer === 'places' ? b.layer === 'place' : b.layer === 'service_area';
+      const categoryMatch = categoryId === 'all' || b.categoryId === categoryId;
+      return layerMatch && categoryMatch;
+    });
 
     const markers: maplibregl.Marker[] = [];
     visible.forEach((b) => {
@@ -175,7 +232,7 @@ export default function MapView({ businesses }: { businesses: BusinessPin[] }) {
     });
 
     return () => markers.forEach((m) => m.remove());
-  }, [businesses, layer]);
+  }, [businesses, layer, categoryId]);
 
   const nearby = userPos
     ? [...businesses]
@@ -185,11 +242,28 @@ export default function MapView({ businesses }: { businesses: BusinessPin[] }) {
     : [];
 
   return (
-    <div className="map-shell">
-      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+    <div className="page">
+      <header className="page-header">
+        <h1>Реестр клеток · Майами</h1>
+        <p className="tagline">ОДНА КЛЕТКА · ОДНА УСЛУГА · ОДИН ВЛАДЕЛЕЦ</p>
+      </header>
+
       <LayerToggle layer={layer} onChange={setLayer} />
-      <NearbyPanel items={nearby} />
-      <div className="claim-hint">Двойной тап по карте — занять клетку</div>
+      <FiltersRow
+        categories={categories}
+        categoryId={categoryId}
+        onCategoryChange={setCategoryId}
+        cellSize={cellSize}
+        onCellSizeChange={setCellSize}
+      />
+      <CityRow onSelect={(lat, lng) => mapRef.current?.flyTo({ center: [lng, lat], zoom: 16 })} />
+
+      <div className="map-box">
+        <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+      </div>
+      <p className="map-caption">Клетка {cellSize} × {cellSize} м · Тапни в любую</p>
+
+      <BottomPanel nearby={nearby} selectedCell={selectedCell} tab={bottomTab} onTabChange={setBottomTab} />
     </div>
   );
 }
