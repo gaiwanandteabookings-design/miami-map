@@ -74,8 +74,9 @@ Google Maps Platform не используем — дорого на объём�
 
 См. `prisma/schema.prisma`. Ключевое ограничение — частичный уникальный индекс
 `UNIQUE (cell_id, category_id) WHERE status = 'active'` в таблице `claims`
-(`sql/partial_unique_index.sql`). Это и есть правило «одна клетка, одна услуга,
-один владелец» — оно живёт в базе, а не в коде.
+(миграция `prisma/migrations/20260729044007_claim_cell_category_unique_active`).
+Это и есть правило «одна клетка, одна услуга, один владелец» — оно живёт в
+базе, а не в коде.
 
 ## 8. Сетка
 

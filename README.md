@@ -7,13 +7,12 @@
 
 Next.js (App Router) · PostgreSQL + PostGIS · Prisma · MapLibre GL JS + OpenStreetMap · Stripe
 
-## Быстрый старт
+## Быстрый старт (локально)
 
 ```bash
 npm install
 cp .env.example .env       # заполнить DATABASE_URL, STRIPE_*
-npx prisma migrate dev --name init
-psql "$DATABASE_URL" -f sql/partial_unique_index.sql
+npx prisma migrate deploy
 npm run db:seed
 npm run dev
 ```
@@ -21,10 +20,18 @@ npm run dev
 Открыть http://localhost:3000 — карта Майами. Двойной тап по карте открывает форму
 занятия клетки.
 
+## Деплой (Vercel + Neon)
+
+`npm run build` сам прогоняет `prisma generate && prisma migrate deploy &&
+tsx prisma/seed.ts && next build` — то есть миграции и сид категорий
+применяются автоматически при каждом деплое на Vercel, вручную ничего
+накатывать не нужно. Единственное требование — переменная `DATABASE_URL`
+должна быть задана в настройках проекта на Vercel (Neon connection string).
+
 ## Структура
 
 - `prisma/schema.prisma` — модель данных (раздел 7 ТЗ)
-- `sql/partial_unique_index.sql` — правило «одна клетка — одна услуга — один владелец» на уровне БД
+- `prisma/migrations/` — включая правило «одна клетка — одна услуга — один владелец» (частичный unique индекс) на уровне БД
 - `src/lib/grid.ts` — математика сетки клеток (раздел 8 ТЗ)
 - `src/components/MapView.tsx` — карта, два слоя, сетка
 - `src/app/b/[slug]` — публичная карточка бизнеса (SSR, замена сайта)
