@@ -1,0 +1,142 @@
+// Реестр клеток — модель данных. См. ТЗ раздел 7.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+generator json {
+  provider = "prisma-client-js"
+}
+
+// --- enums ---
+
+enum BusinessLayer {
+  place // бизнес с адресом
+  service_area // выездной бизнес без адреса
+}
+
+enum ClaimStatus {
+  active
+  expired
+  pending_payment
+}
+
+enum CellZone {
+  center
+  middle
+  edge
+}
+
+enum EventType {
+  impression
+  card_open
+  call
+  message
+  route
+}
+
+// --- models ---
+
+model User {
+  id              String   @id @default(cuid())
+  phone           String   @unique
+  phoneVerifiedAt DateTime? @map("phone_verified_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  businesses Business[]
+
+  @@map("users")
+}
+
+model Category {
+  id   String @id @default(cuid())
+  name String
+  slug String @unique
+  icon String?
+
+  businesses Business[]
+  claims     Claim[]
+
+  @@map("categories")
+}
+
+model Business {
+  id             String        @id @default(cuid())
+  ownerId        String        @map("owner_id")
+  owner          User          @relation(fields: [ownerId], references: [id])
+  name           String
+  slug           String        @unique
+  categoryId     String        @map("category_id")
+  category       Category      @relation(fields: [categoryId], references: [id])
+  layer          BusinessLayer
+  lat            Float
+  lng            Float
+  serviceRadiusM Int?          @map("service_radius_m")
+  phone          String?
+  whatsapp       String?
+  telegram       String?
+  website        String?
+  about          String?
+  hours          Json?
+  photos         Json?
+  verifiedAt     DateTime?     @map("verified_at")
+  registryRef    String?       @map("registry_ref")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  claims Claim[]
+  events Event[]
+
+  @@index([lat, lng])
+  @@map("businesses")
+}
+
+model Cell {
+  id         String   @id @default(cuid())
+  cellX      Int      @map("cell_x")
+  cellY      Int      @map("cell_y")
+  sizeM      Int      @map("size_m") // 100 | 200 | 400
+  zone       CellZone
+  priceUsdMonth Int   @map("price_usd_month")
+
+  claims Claim[]
+
+  @@unique([cellX, cellY, sizeM])
+  @@map("cells")
+}
+
+model Claim {
+  id         String      @id @default(cuid())
+  cellId     String      @map("cell_id")
+  cell       Cell        @relation(fields: [cellId], references: [id])
+  businessId String      @map("business_id")
+  business   Business    @relation(fields: [businessId], references: [id])
+  categoryId String      @map("category_id")
+  category   Category    @relation(fields: [categoryId], references: [id])
+  status     ClaimStatus @default(pending_payment)
+  startsAt   DateTime    @map("starts_at")
+  expiresAt  DateTime    @map("expires_at")
+
+  // Главное правило: в клетке одна активная заявка на категорию.
+  // Postgres частичный уникальный индекс добавлен миграцией вручную:
+  // CREATE UNIQUE INDEX claims_cell_category_active_unique
+  //   ON claims (cell_id, category_id) WHERE status = 'active';
+
+  @@map("claims")
+}
+
+model Event {
+  id         String    @id @default(cuid())
+  businessId String    @map("business_id")
+  business   Business  @relation(fields: [businessId], references: [id])
+  type       EventType
+  createdAt  DateTime  @default(now()) @map("created_at")
+  sessionHash String   @map("session_hash")
+
+  @@index([businessId, type, createdAt])
+  @@map("events")
+}

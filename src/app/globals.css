@@ -1,0 +1,135 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+}
+
+#__next {
+  height: 100%;
+}
+
+.map-shell {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+.layer-toggle {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+  display: flex;
+  gap: 4px;
+  background: white;
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+}
+
+.layer-toggle button {
+  border: none;
+  background: transparent;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.layer-toggle button.active {
+  background: #111;
+  color: white;
+}
+
+.nearby-panel {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  bottom: 12px;
+  width: 300px;
+  max-width: 80vw;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  overflow-y: auto;
+  z-index: 10;
+  padding: 12px;
+}
+
+.nearby-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 6px;
+  border-bottom: 1px solid #eee;
+}
+
+.badge-new {
+  background: #ff3b30;
+  color: white;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  margin-left: 6px;
+}
+
+.business-card {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.business-card h1 {
+  margin-bottom: 4px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+
+.action-buttons a {
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #111;
+  color: white;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.claim-hint {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  z-index: 10;
+  background: rgba(17, 17, 17, 0.85);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(255, 59, 48, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 59, 48, 0);
+  }
+}
