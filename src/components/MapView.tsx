@@ -33,15 +33,16 @@ type BusinessPin = {
   category: { name: string; icon: string | null };
 };
 
-// Светлая минималистичная подложка (CARTO Positron) — вместо шумного
-// дефолтного стиля tile.openstreetmap.org с кучей подписей и цветных зон.
+// Светлая подложка без подписей (CARTO Positron, nolabels) — никаких отелей,
+// POI и прочего шума, который перебивает сетку клеток. Названия бизнесов и
+// коды клеток — свои, их и так видно на маркерах и в сетке.
 const BASEMAP_STYLE = {
   version: 8 as const,
   glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
   sources: {
     basemap: {
       type: 'raster' as const,
-      tiles: ['https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png'],
+      tiles: ['https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}@2x.png'],
       tileSize: 256,
       attribution: '© OpenStreetMap contributors © CARTO',
     },
@@ -123,12 +124,20 @@ export default function MapView({
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
       });
+      // Едва заметная заливка, чтобы клетки читались как области, а не только линии.
+      map.addLayer({
+        id: 'grid-fill',
+        type: 'fill',
+        source: 'grid-cells',
+        minzoom: GRID_MIN_ZOOM,
+        paint: { 'fill-color': '#1d1d1f', 'fill-opacity': 0.03 },
+      });
       map.addLayer({
         id: 'grid-lines',
         type: 'line',
         source: 'grid-cells',
         minzoom: GRID_MIN_ZOOM,
-        paint: { 'line-color': '#0a84ff', 'line-width': 1, 'line-opacity': 0.5 },
+        paint: { 'line-color': '#1d1d1f', 'line-width': 1.5, 'line-opacity': 0.7 },
       });
       map.addLayer({
         id: 'grid-labels',
@@ -142,8 +151,27 @@ export default function MapView({
           'text-offset': [0.3, 0.2],
           'text-allow-overlap': false,
         },
-        paint: { 'text-color': '#0a84ff', 'text-halo-color': '#fff', 'text-halo-width': 1 },
+        paint: { 'text-color': '#1d1d1f', 'text-halo-color': '#fff', 'text-halo-width': 1.2 },
       });
+
+      // Подсветка клетки, по которой тапнули.
+      map.addSource('selected-cell', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'selected-cell-fill',
+        type: 'fill',
+        source: 'selected-cell',
+        paint: { 'fill-color': '#0a84ff', 'fill-opacity': 0.15 },
+      });
+      map.addLayer({
+        id: 'selected-cell-outline',
+        type: 'line',
+        source: 'selected-cell',
+        paint: { 'line-color': '#0a84ff', 'line-width': 2.5 },
+      });
+
       updateGrid();
     });
 
@@ -165,6 +193,29 @@ export default function MapView({
         distanceFromDowntown: distanceMeters(MIAMI_DOWNTOWN, { lat: centerLat, lng: centerLng }),
       });
       setBottomTab('cell');
+
+      const selSource = map.getSource('selected-cell') as maplibregl.GeoJSONSource | undefined;
+      selSource?.setData({
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: {},
+            geometry: {
+              type: 'Polygon',
+              coordinates: [
+                [
+                  [b.west, b.south],
+                  [b.east, b.south],
+                  [b.east, b.north],
+                  [b.west, b.north],
+                  [b.west, b.south],
+                ],
+              ],
+            },
+          },
+        ],
+      });
     });
 
     map.on('dblclick', (e) => {
